@@ -30,8 +30,11 @@ import android.support.v7.app.AppCompatActivity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.Button;
+import android.widget.Toast;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.fit.samples.common.logger.Log;
 import com.google.android.gms.fit.samples.common.logger.LogView;
 import com.google.android.gms.fit.samples.common.logger.LogWrapper;
@@ -86,12 +89,48 @@ public class MainActivity extends AppCompatActivity {
         // screen, as well as to adb logcat.
         initializeLogging();
 
-        // When permissions are revoked the app is restarted so onCreate is sufficient to check for
-        // permissions core to the Activity's functionality.
-        if (hasRuntimePermissions()) {
-            insertAndVerifySessionWrapper();
+        Button connect = findViewById(R.id.button_connect);
+        connect.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // When permissions are revoked the app is restarted so onCreate is sufficient to check for
+                // permissions core to the Activity's functionality.
+                if (hasRuntimePermissions()) {
+                    insertAndVerifySessionWrapper();
+                } else {
+                    requestRuntimePermissions();
+                }
+            }
+        });
+
+        Button disconnect = findViewById(R.id.button_disconnect);
+        disconnect.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                disconnectGoogleFit();
+            }
+        });
+    }
+
+    private void disconnectGoogleFit() {
+        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
+        if (account != null) {
+            Fitness.getConfigClient(this, account).disableFit()
+                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        Log.e(TAG, "disableFit success");
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.e(TAG, "disableFit failed");
+                        e.printStackTrace();
+                    }
+                });
         } else {
-            requestRuntimePermissions();
+            Log.e(TAG, "account is null");
         }
     }
 
@@ -112,7 +151,20 @@ public class MainActivity extends AppCompatActivity {
      */
     private boolean hasOAuthPermission() {
         FitnessOptions fitnessOptions = getFitnessSignInOptions();
-        return GoogleSignIn.hasPermissions(GoogleSignIn.getLastSignedInAccount(this), fitnessOptions);
+        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
+
+        boolean hasPermissions = GoogleSignIn.hasPermissions(account, fitnessOptions);
+
+        if (account != null) {
+            Log.d(TAG, "grantedScopes: " + account.getGrantedScopes());
+        } else {
+            Log.d(TAG, "grantedScopes: account is null");
+        }
+
+        Log.d(TAG, "impliedScopes: " + fitnessOptions.getImpliedScopes());
+        Log.d(TAG, "hasPermissions: " + hasPermissions);
+
+        return hasPermissions;
     }
 
     /** Launches the Google SignIn activity to request OAuth permission for the user. */
@@ -223,7 +275,6 @@ public class MainActivity extends AppCompatActivity {
      *  {@link #verifySession}.
      */
     private void insertAndVerifySession() {
-
         insertSession().continueWithTask(new Continuation<Void, Task<SessionReadResponse>>() {
             @Override
             public Task<SessionReadResponse> then(@NonNull Task<Void> task) throws Exception {
